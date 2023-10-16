@@ -1,0 +1,54 @@
+{
+"name": "modle_parameters",
+"model": {    
+          "model_name": "deepmd",
+          "type_map": [29],
+          "neighbor": 100,
+          "descriptor" : {
+                         "type":"se_e2_r",
+                         "Rmax": 6.0,
+                         "Rmin": 0.5,
+                         "network_size": [25,50,100],
+                         "bias": true,
+                         "resnet_dt": false,
+                         "activate_funtion": "tanh",
+                         "M2": 16
+                            
+              },
+          "fitting_net": {
+                         "network_size": [200,200,200],
+                         "bias": true,
+                         "resnet_dt": true,
+                         "activate_funtion": "tanh"
+              }
+},
+"data_setting": {
+               "train_file":  ["data/Cu_128_300_vasprun.xml"],
+               "valid_file":  ["data/Cu_128_300_vasprun.xml"]
+},
+"training": {
+               "dtype": "float64",
+               "epoch": 20,
+               "optimizer":"ADAM",
+               "save_check": 5,
+               "batch_size": 1,
+               "print_freq": 1,
+               "train_file": "loss.curve"
+},
+"loss_setting": {
+               "start_energy_weight": 1.0,
+               "limit_energy_weight": 1.0,
+               "start_force_weight": 100.0,
+               "limit_force_weight": 1.0,
+               "start_virial_weight": 0.0,
+               "limit_virial_weight": 0.0,
+               "start_ei_weight": 0.0,
+               "limit_ei_weight": 0.0
+},
+"learning_rate" :{
+                  "type": "exp",
+                  "step": 1000,
+                  "start_lr":	1.0e-3,
+                  "stop_lr":	1.0e-8
+    }
+}
