@@ -107,7 +107,7 @@ class MTP(nn.Module):
         batch = neighbor_list.shape[0]
         natom = neighbor_list.shape[1]
         max_neighbor = neighbor_list.shape[2]
-        # Must be set to int64 or it will cause a type mismatch when run in c++.
+        # Must be set to int64,or it will cause a type mismatch when run in c++.
         type_map_temp: torch.Tensor = torch.unique(Imagetype).to(torch.int64)
         type_map: List[int] = type_map_temp.tolist()
         ntype = len(type_map)

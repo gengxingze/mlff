@@ -169,6 +169,8 @@ class DpSe(nn.Module):
         batch = neighbor_list.shape[0]
         natom = neighbor_list.shape[1]
         max_neighbor = neighbor_list.shape[2]
+        device = ImagedR.device
+        dtype = ImagedR.dtype
         # Must be set to int64, or it will cause a type mismatch when run in c++.
         type_map_temp: torch.Tensor = torch.unique(Imagetype).to(torch.int64)
         type_map: List[int] = type_map_temp.tolist()
@@ -180,12 +182,12 @@ class DpSe(nn.Module):
         Ri.requires_grad_()
         # t3 = time.time()
         # Ei[batch, natom, 1]
-        Ei = torch.zeros(batch, natom, 1)
+        Ei = torch.zeros(batch, natom, 1, dtype=dtype, device=device)
         for i, itype in enumerate(type_map):
             # t31 = time.time()
             mesk_itype = (Imagetype == itype)
             i_Ri = Ri[mesk_itype].reshape(batch, -1, max_neighbor * ntype, 4)
-            xyz_scater_a = torch.zeros(batch, i_Ri.shape[1], 1, self.embedding_size[-1])
+            xyz_scater_a = torch.zeros(batch, i_Ri.shape[1], 1, self.embedding_size[-1], dtype=dtype, device=device)
             # t32 = time.time()
             for j, jtype in enumerate(type_map):
                 # srij[batch, natom of itype, neighbor of jtype(100), 1]
@@ -221,11 +223,11 @@ class DpSe(nn.Module):
         # dE * Ri_d [batch,natom,max_neighbor * len(type_map),4,1] * [batch, natom, max_neighbor * len(type_map), 4, 3]
         # dE_Rid [batch, natom, max_neighbor * len(type_map), 3]
         dE_Rid_temp = torch.mul(dE, Ri_d).sum(dim=-2)
-        dE_Rid = torch.zeros(batch, natom, max_neighbor, 3)
+        dE_Rid = torch.zeros(batch, natom, max_neighbor, 3, dtype=dtype, device=device)
         for tt in range(0, ntype):
             dE_Rid += dE_Rid_temp[:, :, tt * max_neighbor:(tt + 1) * max_neighbor, :]
         # Force[batch, natom, 3]
-        Force = torch.zeros(batch, natom + nghost + 1, 3)
+        Force = torch.zeros(batch, natom + nghost + 1, 3, dtype=dtype, device=device)
         Force[:, 1:natom+1, :] = -1 * dE_Rid.sum(dim=-2)
         # Here only the action force F_ij = -1 * sum(de_ij * dr_ij) is considered, and the reaction force
         # -F_ji = sum(de_ji * dr_ji) should also be considered and subtracted from.
@@ -238,10 +240,13 @@ class DpSe(nn.Module):
         for bb in range(0, batch):
             indice = neighbor_list[bb].squeeze(dim=0).to(torch.int64).view(-1).unsqueeze(-1).expand(-1, 3)
             values = dE_Rid[bb].squeeze(dim=0).view(-1, 3)
-            Force[bb] = Force[bb].scatter_add(0, indice, values).view(natom + nghost+1, 3)
+            Force[bb] = Force[bb].scatter_add(0, indice, values).reshape(natom + nghost+1, 3)
         Force = Force[:, 1:, :]
         # t5 = time.time()
+        # Calculate varial
+        # c = torch.matmul(a.unsqueeze(-1), b.unsqueeze(-2)).reshape(2, 10, 9)
         # print(t5-t4, t4-t3, t3-t2, t2-t1)
+
         return Etot, Ei, Force
 
     def calculate_Ri(self,
@@ -250,15 +255,17 @@ class DpSe(nn.Module):
                      neighbor_list: torch.Tensor,
                      neighbor_type: torch.Tensor,
                      ImagedR: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        pi = 3.1415926535
+        # pi = 3.1415926535
         batch = neighbor_list.shape[0]
         natom = neighbor_list.shape[1]
         max_neighbor = neighbor_list.shape[2]
+        device = ImagedR.device
+        dtype = ImagedR.dtype
         # t1 = time.time()
         R = ImagedR[:, :, :, 0]
         R.requires_grad_()
 
-        Srij = torch.zeros(batch, natom, max_neighbor)
+        Srij = torch.zeros(batch, natom, max_neighbor, dtype=dtype, device=device)
         Srij[(R > 0) & (R < self.Rmin)] = 1 / R[(R > 0) & (R < self.Rmin)]
         r = R[(R > self.Rmin) & (R < self.Rmax)]
         Srij[(R > self.Rmin) & (R < self.Rmax)] = 1 / r * (((r - self.Rmin) / (self.Rmax - self.Rmin)) ** 3 * (
@@ -269,7 +276,7 @@ class DpSe(nn.Module):
         mask = (R.abs() > 1e-5)
 
         # Ri[batch, natom, max_neighbor, 4] 4-->[Srij, Srij * xij / rij, Srij * yij / rij, Srij * yij / rij]
-        Ri = torch.zeros(batch, natom, max_neighbor, 4)
+        Ri = torch.zeros(batch, natom, max_neighbor, 4, dtype=dtype, device=device)
         Ri[:, :, :, 0] = Srij
         Ri[:, :, :, 1][mask] = Srij[mask] * ImagedR[:, :, :, 1][mask] / ImagedR[:, :, :, 0][mask]
         Ri[:, :, :, 2][mask] = Srij[mask] * ImagedR[:, :, :, 2][mask] / ImagedR[:, :, :, 0][mask]
@@ -281,8 +288,8 @@ class DpSe(nn.Module):
         assert d_Srij is not None
         # feat [batch, natom, max_neighbor * len(type_map), 4]
         # dfeat [batch, natom, max_neighbor * len(type_map), 4, 3] 3-->[dx, dy, dz]
-        feat = torch.zeros(batch, natom, max_neighbor * len(type_map), 4)
-        dfeat = torch.zeros(batch, natom, max_neighbor * len(type_map), 4, 3)
+        feat = torch.zeros(batch, natom, max_neighbor * len(type_map), 4, dtype=dtype, device=device)
+        dfeat = torch.zeros(batch, natom, max_neighbor * len(type_map), 4, 3, dtype=dtype, device=device)
 
         for i, itype in enumerate(type_map):
             Ri_temp = Ri.clone()
@@ -315,14 +322,11 @@ class DpSe(nn.Module):
             dfeat[:, :, max_neighbor * i:max_neighbor * (i + 1), 2, 2][mask_r] = common * yij * zij
             dfeat[:, :, max_neighbor * i:max_neighbor * (i + 1), 3, 2][mask_r] = common * zij * zij + Srij[mask_r] / rij
         # t3 = time.time()
-        # davg_res = torch.zeros(0)
-        # dstd_res = torch.zeros(0)
-        Ri = torch.zeros(feat.shape)
-        Ri_d = torch.zeros(dfeat.shape)
+
+        Ri = torch.zeros(feat.shape, dtype=dtype, device=device)
+        Ri_d = torch.zeros(dfeat.shape, dtype=dtype, device=device)
         for i, element in enumerate(type_map):
             indice = self.type_map.index(element)
-            # davg_res = self.stdv[0][indice]
-            # dstd_res = self.stdv[1][indice]
             mesk_f = (Imagetype == element)
             Ri[:, :, :, 0][mesk_f] = (feat[:, :, :, 0][mesk_f] - 0.03) / 0.08
             mesk_f = (Imagetype == element)

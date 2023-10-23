@@ -51,7 +51,8 @@ if __name__ == '__main__':
     with open("input.json") as fp:
         config = json.load(fp)
     print(config)
-
+    # torch.set_default_dtype(torch.float64)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_threads = torch.get_num_threads()
     num_cores = torch.get_num_interop_threads()
     # torch.set_num_threads(1)
@@ -62,7 +63,7 @@ if __name__ == '__main__':
         training_data_list, vaild_data_list = read_data.get_data(config['data_setting']['train_file'], config['data_setting']['valid_file'], logger)
         all_data = torch.utils.data.ConcatDataset(training_data_list)
         vaild_data = torch.utils.data.ConcatDataset(vaild_data_list)
-        train_load = torch.utils.data.DataLoader(all_data, batch_size=2, shuffle=True, num_workers=1)
+        train_load = torch.utils.data.DataLoader(all_data, batch_size=1, shuffle=True, num_workers=1)
     #model_name = config['model']['model_name']
     model_name = 'deepmd'
     if model_name == 'nn':
@@ -89,9 +90,12 @@ if __name__ == '__main__':
                       config["model"]["type_map"],
                       config["model"]["neighbor"],
                       energy_shift=[-3.37, -4.0], stdv=None)
-    net.double()
-    torch.set_default_dtype(torch.float64)
-    device = torch.device("cpu")
+
+    net.to(device)
+    if config["training"]['dtype'] == "float32":
+        net.float()
+    else:
+        net.double()
     read_modle = False
     if read_modle:
         # net.load_state_dict(torch.load('output/latest.pt')["state_dict"])
@@ -170,7 +174,7 @@ if __name__ == '__main__':
     for i in range(100):
         aa = torch.rand(1, 128, 100, 4) * 3
         t1 = time.time()
-        a, b, c = ms(torch.full((1, 128), 29), torch.full((1, 128, 100), 29), torch.full((1, 128, 100), 29), aa, 0)
+        a, b, c = ms(torch.full((1, 128), 29).to("cuda"), torch.full((1, 128, 100), 29).to("cuda"), torch.full((1, 128, 100), 29).to("cuda"), torch.rand(1, 128, 100, 4).to("cuda"), 0)
         print('time',time.time() - t1)
     print('0000000')
 

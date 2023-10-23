@@ -25,7 +25,7 @@ def read_data(filelist: list, cutoff: float, logger):
     for ii, file in enumerate(filelist):
         dp = dpdata.LabeledSystem(file, fmt="vasp/xml")
         # nframes = dp.get_nframes()
-        nframes = 500
+        nframes = 50
         nimage = nimage + nframes
         atom = io.read(file, index='0:' + str(nframes))
         neighbor_list = []
