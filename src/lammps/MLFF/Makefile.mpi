@@ -12,7 +12,7 @@ SHFLAGS =	-fPIC
 DEPFLAGS =	-M
 
 LINK =		mpicxx
-LINKFLAGS =	-g -O3 -std=c++14
+LINKFLAGS =	-g -O3 -std=c++17
 LIB =
 SIZE =		size
 

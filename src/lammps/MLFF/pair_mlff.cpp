@@ -298,10 +298,7 @@ void PairMlff::compute(int eflag, int vflag)
     }
     // If virial needed calculate via F dot r.
     if (vflag_fdotr) virial_fdotr_compute();
-    free(ptrImagedR);
-    free(ptrImagetype);
-    free(ptrneighbor_list);
-    free(ptrneighbor_type);
+
     auto t8 = std::chrono::high_resolution_clock::now();
     std::cout << "t1 " << (t2 - t1).count() * 0.000001 << "ms" << std::endl;
     std::cout << "t2 " << (t3 - t2).count() * 0.000001 << "ms" << std::endl;
